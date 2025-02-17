@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-demo
+  namespace: demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: otel-demo
+  template:
+    metadata:
+      labels:
+        app: otel-demo
+    spec:
+      containers:
+      - name: otel-demo
+        image: otel/opentelemetry-demo:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://otel-collector:4317"
+        envFrom:
+        - secretRef:
+            name: db-credentials
+        - configMapRef:
+            name: db-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-demo
+  namespace: demo
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+  selector:
+    app: otel-demo 

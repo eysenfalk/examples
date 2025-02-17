@@ -1,0 +1,44 @@
+apiVersion: monitoring.grafana.com/v1alpha1
+kind: GrafanaAgent
+metadata:
+  name: grafana-agent
+  namespace: monitoring
+spec:
+  integrations:
+    metrics:
+      prometheus:
+        enabled: true
+        scrape_configs:
+        - job_name: 'otel-collector'
+          static_configs:
+          - targets: ['otel-collector:8889']
+    logs:
+      loki:
+        enabled: true
+    traces:
+      tempo:
+        enabled: true
+---
+apiVersion: monitoring.grafana.com/v1alpha1
+kind: Mimir
+metadata:
+  name: mimir
+  namespace: monitoring
+spec:
+  replicas: 1
+---
+apiVersion: monitoring.grafana.com/v1alpha1
+kind: Loki
+metadata:
+  name: loki
+  namespace: monitoring
+spec:
+  replicas: 1
+---
+apiVersion: monitoring.grafana.com/v1alpha1
+kind: Tempo
+metadata:
+  name: tempo
+  namespace: monitoring
+spec:
+  replicas: 1 
