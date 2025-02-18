@@ -16,5 +16,13 @@ terraform {
       source  = "cloudflare/cloudflare"
       version = "~> 5.1.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.9.0"
+    }
+    exoscale = {
+      source  = "exoscale/exoscale"
+      version = "~> 0.62.3"
+    }
   }
 } 

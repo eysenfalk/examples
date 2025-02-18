@@ -10,6 +10,54 @@ resource "kubernetes_namespace" "demo" {
   }
 }
 
+# # Install NGINX Ingress Controller
+# resource "helm_release" "nginx_ingress" {
+#   name       = "nginx-ingress"
+#   repository = "https://kubernetes.github.io/ingress-nginx"
+#   chart      = "ingress-nginx"
+#   namespace  = "kube-system"
+
+#   set {
+#     name  = "controller.service.type"
+#     value = "LoadBalancer"
+#   }
+
+#   set {
+#     name  = "controller.metrics.enabled"
+#     value = "true"
+#   }
+
+#   wait = true
+#   timeout = 300
+# }
+
+# Install cert-manager using Helm
+resource "helm_release" "cert_manager" {
+  name             = "cert-manager"
+  repository       = "https://charts.jetstack.io"
+  chart            = "cert-manager"
+  namespace        = "cert-manager"
+  create_namespace = true
+  version          = "v1.17.1"
+
+  set {
+    name  = "crds.enabled"
+    value = "true"
+  }
+
+  # Optional: Add Prometheus monitoring
+  set {
+    name  = "prometheus.enabled"
+    value = "true"
+  }
+}
+
+# Increase the wait time for CRDs
+resource "time_sleep" "wait_for_cert_manager_crds" {
+  depends_on = [helm_release.cert_manager]
+  create_duration = "60s"
+}
+
 # Create Cloudflare API token secret for cert-manager
 resource "kubernetes_secret" "cloudflare_api_token" {
   metadata {
@@ -26,155 +74,48 @@ resource "kubernetes_secret" "cloudflare_api_token" {
   ]
 }
 
-# Install NGINX Ingress Controller
-resource "helm_release" "nginx_ingress" {
-  name       = "nginx-ingress"
-  repository = "https://kubernetes.github.io/ingress-nginx"
-  chart      = "ingress-nginx"
-  namespace  = "kube-system"
-
-  set {
-    name  = "controller.service.type"
-    value = "LoadBalancer"
-  }
-
-  set {
-    name  = "controller.metrics.enabled"
-    value = "true"
-  }
-}
-
-# Install cert-manager
-resource "helm_release" "cert_manager" {
-  name       = "cert-manager"
-  repository = "https://charts.jetstack.io"
-  chart      = "cert-manager"
-  namespace  = "cert-manager"
-  create_namespace = true
-
-  set {
-    name  = "installCRDs"
-    value = "true"
-  }
-}
-
-# Create Let's Encrypt ClusterIssuer with DNS01 challenge
+# Update the cluster issuer to depend on the time_sleep
 resource "kubectl_manifest" "cluster_issuer" {
-  yaml_body = <<-YAML
-    apiVersion: cert-manager.io/v1
-    kind: ClusterIssuer
-    metadata:
+  yaml_body = <<YAML
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    email: ${var.letsencrypt_email}
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
       name: letsencrypt-prod
-    spec:
-      acme:
-        server: https://acme-v02.api.letsencrypt.org/directory
-        email: ${var.letsencrypt_email}
-        privateKeySecretRef:
-          name: letsencrypt-prod
-        solvers:
-        - dns01:
-            cloudflare:
-              apiTokenSecretRef:
-                name: cloudflare-api-token
-                key: api-token
-  YAML
+    solvers:
+    - dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: api-token
+YAML
 
   depends_on = [
     helm_release.cert_manager,
-    kubernetes_secret.cloudflare_api_token
+    kubernetes_secret.cloudflare_api_token,
+    time_sleep.wait_for_cert_manager_crds
   ]
 }
 
-# Grafana Operator CRDs and deployment
-resource "helm_release" "grafana_operator" {
-  name       = "grafana-operator"
-  repository = "https://grafana.github.io/helm-charts"
-  chart      = "grafana-operator"
-  namespace  = kubernetes_namespace.monitoring.metadata[0].name
-
-  set {
-    name  = "operator.enabled"
-    value = "true"
-  }
-}
-
-# Create secrets
-resource "kubernetes_secret" "grafana_credentials" {
-  metadata {
-    name      = "grafana-admin-credentials"
-    namespace = kubernetes_namespace.monitoring.metadata[0].name
-  }
-
-  data = {
-    "admin-user"     = "admin"
-    "admin-password" = var.grafana_admin_password
-  }
-}
-
-resource "kubernetes_secret" "db_credentials" {
-  metadata {
-    name      = "db-credentials"
-    namespace = kubernetes_namespace.demo.metadata[0].name
-  }
-
-  data = {
-    POSTGRES_USER     = base64encode(var.db_user)
-    POSTGRES_PASSWORD = base64encode(var.db_password)
-    POSTGRES_DB       = base64encode(var.db_name)
-  }
-}
-
-resource "kubernetes_config_map" "db_config" {
-  metadata {
-    name      = "db-config"
-    namespace = kubernetes_namespace.demo.metadata[0].name
-  }
-
-  data = {
-    POSTGRES_HOST = var.db_host
-    POSTGRES_PORT = var.db_port
-  }
-}
-
-# Apply Kubernetes manifests
-resource "kubectl_manifest" "monitoring" {
+# Deploy monitoring stack
+resource "kubectl_manifest" "monitoring_stack" {
   yaml_body = file("${path.module}/manifests/monitoring.yaml")
 
   depends_on = [
-    helm_release.grafana_operator
-  ]
-}
-
-resource "kubectl_manifest" "otel_collector" {
-  yaml_body = file("${path.module}/manifests/otel-collector.yaml")
-
-  depends_on = [
-    kubernetes_config_map.db_config
-  ]
-}
-
-resource "kubectl_manifest" "demo_app" {
-  yaml_body = file("${path.module}/manifests/demo-app.yaml")
-
-  depends_on = [
-    kubectl_manifest.otel_collector
-  ]
-}
-
-resource "kubectl_manifest" "dashboards" {
-  yaml_body = file("${path.module}/manifests/dashboards.yaml")
-
-  depends_on = [
-    helm_release.grafana_operator
-  ]
-}
-
-resource "kubectl_manifest" "ingress" {
-  yaml_body = file("${path.module}/manifests/ingress.yaml")
-
-  depends_on = [
-    helm_release.nginx_ingress,
+    kubernetes_namespace.monitoring,
     helm_release.cert_manager,
-    kubectl_manifest.cluster_issuer
+    kubernetes_secret.cloudflare_api_token,
+    kubectl_manifest.ingress_controller
   ]
-} 
+}
+
+# Deploy NGINX ingress controller
+resource "kubectl_manifest" "ingress_controller" {
+  yaml_body = file("${path.module}/manifests/ingress-controller.yaml")
+  
+}

@@ -37,6 +37,11 @@ provider "cloudflare" {
   api_token = var.cloudflare_api_token
 }
 
+resource "local_file" "kubeconfig" {
+  content  = module.sks_cluster.kubeconfig
+  filename = "${path.root}/kubeconfig"
+}
+
 provider "kubernetes" {
   config_path = local_file.kubeconfig.filename
 }
@@ -51,8 +56,3 @@ provider "kubectl" {
   config_path = local_file.kubeconfig.filename
 }
 
-# Write kubeconfig to a local file
-resource "local_file" "kubeconfig" {
-  content  = module.sks_cluster.kubeconfig
-  filename = "${path.module}/kubeconfig"
-}

@@ -8,3 +8,7 @@ output "kubeconfig" {
   value       = exoscale_sks_kubeconfig.kubeconfig.kubeconfig
   sensitive   = true
 }
+
+output "cluster_name" {
+  value = exoscale_sks_cluster.cluster.name
+}

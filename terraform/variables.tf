@@ -54,7 +54,7 @@ variable "node_pools" {
   }))
   default = {
     "general" = {
-      size        = "standard.small"
+      size        = "standard.large"
       node_count  = 3
       disk_size   = 50
       description = "General purpose nodes"

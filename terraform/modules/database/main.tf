@@ -3,7 +3,7 @@ resource "exoscale_database" "db" {
   type               = var.database.type
   zone               = var.zone
   plan               = var.database.size
-  termination_protection = true
+  termination_protection = false
 
   pg {
     version = var.database.version
@@ -18,7 +18,7 @@ resource "exoscale_database" "db" {
   maintenance_time = "20:00:00"
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 

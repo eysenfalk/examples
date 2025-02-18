@@ -49,4 +49,20 @@ variable "cloudflare_api_token" {
   description = "Cloudflare API token with DNS edit permissions"
   type        = string
   sensitive   = true
+}
+
+variable "cluster_name" {
+  description = "Name of the Kubernetes cluster"
+  type        = string
+}
+
+variable "zone" {
+  description = "Exoscale zone where cluster is located"
+  type        = string
+}
+
+variable "instance_pool_size" {
+  description = "Number of instances in the pool"
+  type        = number
+  default     = 2
 } 

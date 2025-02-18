@@ -36,4 +36,7 @@ module "kubernetes_resources" {
   cloudflare_zone_id    = var.cloudflare_zone_id
   domain_name           = var.domain_name
   cloudflare_api_token  = var.cloudflare_api_token
+  cluster_name          = var.cluster_name
+  zone                  = var.zone
+  instance_pool_size  = 2
 } 
